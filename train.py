@@ -14,7 +14,7 @@ import sys
 import time
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="7" 
+os.environ["CUDA_VISIBLE_DEVICES"]="6" 
 
 import tensorflow as tf
 import numpy as np
@@ -34,10 +34,10 @@ NUM_CLASSES = 21
 NUM_STEPS = 1000
 POWER = 0.9
 RANDOM_SEED = 1234
-RESTORE_FROM = './deeplab_resnet.ckpt'
+RESTORE_FROM = None#'./deeplab_resnet.ckpt'
 SAVE_NUM_IMAGES = 3
 SAVE_PRED_EVERY = 500
-SNAPSHOT_DIR = './snapshots4/'
+SNAPSHOT_DIR = './snapshots5/'
 WEIGHT_DECAY = 0.0005
 
 
@@ -185,7 +185,9 @@ def main():
     reduced_loss = tf.reduce_mean(loss) + tf.add_n(l2_losses)
     
     #loss summary
-    tf.summary.scalar('loss',reduced_loss,collections=['brief', 'detailed', tf.GraphKeys.SUMMARIES])
+    tf.summary.scalar('loss',loss,collections=['brief', 'detailed', tf.GraphKeys.SUMMARIES])
+    tf.summary.scalar('l2_losses',l2_losses,collections=['brief', 'detailed', tf.GraphKeys.SUMMARIES])
+    tf.summary.scalar('reduced_loss',reduced_loss,collections=['brief', 'detailed', tf.GraphKeys.SUMMARIES])
 
     # Processed predictions: for visualisation.
     raw_output_up = tf.image.resize_bilinear(raw_output, tf.shape(image_batch)[1:3,])

@@ -13,12 +13,14 @@ import sys
 import time
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="7" 
+os.environ["CUDA_VISIBLE_DEVICES"]="6" 
+
+from PIL import Image
 
 import tensorflow as tf
 import numpy as np
 
-from deeplab_resnet import DeepLabResNetModel, ImageReader, prepare_label
+from deeplab_resnet import DeepLabResNetModel, ImageReader, decode_labels, prepare_label
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
@@ -28,6 +30,7 @@ IGNORE_LABEL = 255
 NUM_CLASSES = 21
 NUM_STEPS = 1449 # Number of images in the validation set.
 RESTORE_FROM = './snapshots4/model.ckpt-500'
+SAVE_DIR='./output/'
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -48,6 +51,8 @@ def get_arguments():
                         help="Number of images in the validation set.")
     parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
                         help="Where restore model parameters from.")
+    parser.add_argument("--save-dir", type=str, default=SAVE_DIR,
+                        help="Where to save the output masks.")
     return parser.parse_args()
 
 def load(saver, sess, ckpt_path):
@@ -92,10 +97,10 @@ def main():
     raw_output = net.layers['fc1_voc12']
     raw_output = tf.image.resize_bilinear(raw_output, tf.shape(image_batch)[1:3,])
     raw_output = tf.argmax(raw_output, dimension=3)
-    pred = tf.expand_dims(raw_output, dim=3) # Create 4-d tensor.
+    predori = tf.expand_dims(raw_output, dim=3) # Create 4-d tensor.
     
     # mIoU
-    pred = tf.reshape(pred, [-1,])
+    pred = tf.reshape(predori, [-1,])
     gt = tf.reshape(label_batch, [-1,])
     weights = tf.cast(tf.less_equal(gt, args.num_classes - 1), tf.int32) # Ignoring all labels greater than or equal to n_classes.
     mIoU, update_op = tf.contrib.metrics.streaming_mean_iou(pred, gt, num_classes=args.num_classes, weights=weights)
@@ -117,11 +122,23 @@ def main():
     # Start queue threads.
     threads = tf.train.start_queue_runners(coord=coord, sess=sess)
     
+    f=open(args.data_list, 'r')
     # Iterate over training steps.
     for step in range(args.num_steps):
-        preds, _ = sess.run([pred, update_op])
+        preds, _ = sess.run([predori, update_op])
+        line=f.readline()
+        try:
+            mask = line.strip("\n").split('/')[-1]
+        except ValueError: # Adhoc for test.
+            imm = mask = line.strip("\n")
+        msk = decode_labels(preds, num_classes=args.num_classes)
+        im = Image.fromarray(msk[0])
+        if not os.path.exists(args.save_dir):
+            os.makedirs(args.save_dir)
+        im.save(args.save_dir + mask)
         if step % 10 == 0:
             print('step {:d}'.format(step))
+            print('The output file has been saved to {}'.format(args.save_dir + mask))
     print('Mean IoU: {:.3f}'.format(mIoU.eval(session=sess)))
     coord.request_stop()
     coord.join(threads)
