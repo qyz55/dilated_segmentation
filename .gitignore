@@ -106,3 +106,4 @@ snapshots*
 snapshots
 *.ckpt
 *.py.bak
+output/
